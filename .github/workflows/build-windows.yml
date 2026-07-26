@@ -81,38 +81,52 @@ jobs:
             --target-list=ia64-softmmu \
             --enable-gtk
 
-      - name: Build IA64 only
+      - name: List Ninja Targets
         run: |
-          export PATH=/mingw64/bin:$PATH
-
-          ninja -C build \
-            qemu-system-ia64 \
-            roms/ia64-firmware/ia64-firmware.bin
-
-      - name: Collect
-        if: always()
-        run: |
-          mkdir -p artifacts
-
-          echo "===== EXE ====="
-          find build -name "qemu-system-ia64*" || true
-
-          echo "===== Firmware ====="
-          find build -name "ia64-firmware.bin" || true
-
-          if [ -f build/qemu-system-ia64.exe ]; then
-              cp build/qemu-system-ia64.exe artifacts/
-          elif [ -f build/qemu-system-ia64 ]; then
-              cp build/qemu-system-ia64 artifacts/
-          fi
-
-          if [ -f build/roms/ia64-firmware/ia64-firmware.bin ]; then
-              mkdir -p artifacts/roms/ia64-firmware
-              cp build/roms/ia64-firmware/ia64-firmware.bin \
-                 artifacts/roms/ia64-firmware/
-          fi
-
-          cp /mingw64/bin/*.dll artifacts/ 2>/dev/null || true
+            export PATH=/mingw64/bin:$PATH
+          
+            ninja -C build -t targets all | grep -i ia64 || true
+          
+            echo "======================"
+          
+            ninja -C build -t targets all | grep qemu || true
+          
+            echo "======================"
+          
+            ninja -C build -t targets all | head -200
+          
+              - name: Build IA64 only
+                run: |
+                  export PATH=/mingw64/bin:$PATH
+          
+                  ninja -C build \
+                    qemu-system-ia64 \
+                    roms/ia64-firmware/ia64-firmware.bin
+          
+              - name: Collect
+                if: always()
+                run: |
+                  mkdir -p artifacts
+          
+                  echo "===== EXE ====="
+                  find build -name "qemu-system-ia64*" || true
+          
+                  echo "===== Firmware ====="
+                  find build -name "ia64-firmware.bin" || true
+          
+                  if [ -f build/qemu-system-ia64.exe ]; then
+                      cp build/qemu-system-ia64.exe artifacts/
+                  elif [ -f build/qemu-system-ia64 ]; then
+                      cp build/qemu-system-ia64 artifacts/
+                  fi
+          
+                  if [ -f build/roms/ia64-firmware/ia64-firmware.bin ]; then
+                      mkdir -p artifacts/roms/ia64-firmware
+                      cp build/roms/ia64-firmware/ia64-firmware.bin \
+                         artifacts/roms/ia64-firmware/
+                  fi
+          
+                  cp /mingw64/bin/*.dll artifacts/ 2>/dev/null || true
 
       - name: Upload
         if: always()
