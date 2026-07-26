@@ -28,6 +28,7 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
+          path-type: inherit
           update: true
           install: >-
             base-devel
@@ -37,8 +38,9 @@ jobs:
             meson
             pkgconf
             diffutils
-            python
             mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-python-pip
             mingw-w64-x86_64-glib2
             mingw-w64-x86_64-pixman
             mingw-w64-x86_64-zlib
@@ -48,11 +50,29 @@ jobs:
 
       - name: Show Environment
         run: |
+          echo "===== Environment ====="
           uname -a
-          gcc --version
+          echo
+
+          echo "PATH"
+          echo "$PATH"
+          echo
+
+          echo "Python"
+          which python
           python --version
+          pip --version
+          echo
+
+          echo "GCC"
+          which gcc
+          gcc --version
+          echo
+
+          echo "Meson"
           meson --version
           ninja --version
+          echo
 
       - name: Detect Build System
         id: detect
@@ -62,7 +82,8 @@ jobs:
           elif [ -f meson.build ]; then
             echo "type=meson" >> $GITHUB_OUTPUT
           else
-            echo "Unknown build system."
+            echo "Unknown build system!"
+            ls -la
             exit 1
           fi
 
@@ -70,17 +91,19 @@ jobs:
         if: steps.detect.outputs.type == 'configure'
         run: |
           chmod +x configure
+
           ./configure \
             --target-list=ia64-softmmu \
             --enable-slirp \
-            --enable-sdl
+            --enable-sdl || \
+          ./configure
 
       - name: Configure (meson)
         if: steps.detect.outputs.type == 'meson'
         run: |
+          meson setup build || \
           meson setup build \
-            -Dstrip=true \
-            -Ddefault_targets=ia64-softmmu
+            -Dstrip=true
 
       - name: Build (configure)
         if: steps.detect.outputs.type == 'configure'
@@ -92,11 +115,16 @@ jobs:
         run: |
           ninja -C build
 
-      - name: Collect
+      - name: Find executables
+        run: |
+          echo "===== EXE ====="
+          find . -iname "*.exe"
+
+      - name: Collect Artifacts
         run: |
           mkdir artifacts
 
-          find . -name "*.exe" -exec cp {} artifacts/ \; || true
+          find . -iname "*.exe" -exec cp {} artifacts/ \; || true
 
           if [ -d pc-bios ]; then
             cp -r pc-bios artifacts/
@@ -108,7 +136,7 @@ jobs:
 
           cp /mingw64/bin/*.dll artifacts/ || true
 
-      - name: Upload
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: qemu-ia64-windows
