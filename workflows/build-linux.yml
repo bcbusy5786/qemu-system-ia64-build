@@ -1,0 +1,99 @@
+name: Build QEMU IA-64 (Linux)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "**"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+
+          sudo apt-get install -y \
+            build-essential \
+            ninja-build \
+            meson \
+            pkg-config \
+            git \
+            python3 \
+            python3-pip \
+            python3-venv \
+            libglib2.0-dev \
+            libpixman-1-dev \
+            zlib1g-dev \
+            libsdl2-dev \
+            libgtk-3-dev \
+            libslirp-dev \
+            libcapstone-dev
+
+      - name: Show Environment
+        run: |
+          uname -a
+
+          echo "===== GCC ====="
+          gcc --version
+
+          echo "===== Python ====="
+          python3 --version
+
+          echo "===== Meson ====="
+          meson --version
+
+          echo "===== Ninja ====="
+          ninja --version
+
+      - name: Configure
+        run: |
+          chmod +x configure
+
+          ./configure \
+            --enable-gtk
+
+      - name: Build
+        run: |
+          ninja -C build \
+            qemu-system-ia64 \
+            roms/ia64-firmware/ia64-firmware.bin
+
+      - name: Show Build Directory
+        if: always()
+        run: |
+          echo "===== build ====="
+          find build -maxdepth 3 -type f | sort
+
+      - name: Collect Artifacts
+        if: always()
+        run: |
+          mkdir -p artifacts
+
+          if [ -f build/qemu-system-ia64 ]; then
+            cp build/qemu-system-ia64 artifacts/
+          fi
+
+          if [ -f build/roms/ia64-firmware/ia64-firmware.bin ]; then
+            mkdir -p artifacts/roms/ia64-firmware
+            cp build/roms/ia64-firmware/ia64-firmware.bin \
+              artifacts/roms/ia64-firmware/
+          fi
+
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-system-ia64-linux
+          path: artifacts
