@@ -1,0 +1,115 @@
+name: Build QEMU IA-64 (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "**"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            base-devel
+            git
+            make
+            ninja
+            meson
+            pkgconf
+            diffutils
+            python
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-glib2
+            mingw-w64-x86_64-pixman
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-libslirp
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-capstone
+
+      - name: Show Environment
+        run: |
+          uname -a
+          gcc --version
+          python --version
+          meson --version
+          ninja --version
+
+      - name: Detect Build System
+        id: detect
+        run: |
+          if [ -f configure ]; then
+            echo "type=configure" >> $GITHUB_OUTPUT
+          elif [ -f meson.build ]; then
+            echo "type=meson" >> $GITHUB_OUTPUT
+          else
+            echo "Unknown build system."
+            exit 1
+          fi
+
+      - name: Configure (configure)
+        if: steps.detect.outputs.type == 'configure'
+        run: |
+          chmod +x configure
+          ./configure \
+            --target-list=ia64-softmmu \
+            --enable-slirp \
+            --enable-sdl
+
+      - name: Configure (meson)
+        if: steps.detect.outputs.type == 'meson'
+        run: |
+          meson setup build \
+            -Dstrip=true \
+            -Ddefault_targets=ia64-softmmu
+
+      - name: Build (configure)
+        if: steps.detect.outputs.type == 'configure'
+        run: |
+          make -j$(nproc)
+
+      - name: Build (meson)
+        if: steps.detect.outputs.type == 'meson'
+        run: |
+          ninja -C build
+
+      - name: Collect
+        run: |
+          mkdir artifacts
+
+          find . -name "*.exe" -exec cp {} artifacts/ \; || true
+
+          if [ -d pc-bios ]; then
+            cp -r pc-bios artifacts/
+          fi
+
+          if [ -d build/pc-bios ]; then
+            cp -r build/pc-bios artifacts/
+          fi
+
+          cp /mingw64/bin/*.dll artifacts/ || true
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-ia64-windows
+          path: artifacts
