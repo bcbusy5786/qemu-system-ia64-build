@@ -28,6 +28,7 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
+          path-type: minimal
           update: true
           install: >-
             base-devel
@@ -37,8 +38,9 @@ jobs:
             meson
             pkgconf
             diffutils
-            python
             mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-python-pip
             mingw-w64-x86_64-glib2
             mingw-w64-x86_64-pixman
             mingw-w64-x86_64-zlib
@@ -48,28 +50,59 @@ jobs:
 
       - name: Show Environment
         run: |
-          uname -a
-          gcc --version
+          export PATH=/mingw64/bin:$PATH
+
+          echo "===== PATH ====="
+          echo "$PATH"
+
+          echo
+          echo "===== Python ====="
+          which python
           python --version
+
+          which pip
+          pip --version
+
+          echo
+          echo "===== GCC ====="
+          which gcc
+          gcc --version
+
+          echo
+          echo "===== Meson ====="
+          which meson
           meson --version
+
+          echo
+          echo "===== Ninja ====="
+          which ninja
           ninja --version
 
       - name: Detect Build System
         id: detect
         run: |
+          export PATH=/mingw64/bin:$PATH
+
           if [ -f configure ]; then
-            echo "type=configure" >> $GITHUB_OUTPUT
+            echo "type=configure" >> "$GITHUB_OUTPUT"
           elif [ -f meson.build ]; then
-            echo "type=meson" >> $GITHUB_OUTPUT
+            echo "type=meson" >> "$GITHUB_OUTPUT"
           else
-            echo "Unknown build system."
+            echo "Repository files:"
+            ls -la
             exit 1
           fi
 
       - name: Configure (configure)
         if: steps.detect.outputs.type == 'configure'
         run: |
+          export PATH=/mingw64/bin:$PATH
+
+          which python
+          python --version
+
           chmod +x configure
+
           ./configure \
             --target-list=ia64-softmmu \
             --enable-slirp \
@@ -78,25 +111,30 @@ jobs:
       - name: Configure (meson)
         if: steps.detect.outputs.type == 'meson'
         run: |
-          meson setup build \
-            -Dstrip=true \
-            -Ddefault_targets=ia64-softmmu
+          export PATH=/mingw64/bin:$PATH
+
+          meson setup build
 
       - name: Build (configure)
         if: steps.detect.outputs.type == 'configure'
         run: |
+          export PATH=/mingw64/bin:$PATH
+
           make -j$(nproc)
 
       - name: Build (meson)
         if: steps.detect.outputs.type == 'meson'
         run: |
+          export PATH=/mingw64/bin:$PATH
+
           ninja -C build
 
-      - name: Collect
+      - name: Collect Artifacts
+        if: always()
         run: |
-          mkdir artifacts
+          mkdir -p artifacts
 
-          find . -name "*.exe" -exec cp {} artifacts/ \; || true
+          find . -iname "*.exe" -exec cp {} artifacts/ \; || true
 
           if [ -d pc-bios ]; then
             cp -r pc-bios artifacts/
@@ -106,9 +144,10 @@ jobs:
             cp -r build/pc-bios artifacts/
           fi
 
-          cp /mingw64/bin/*.dll artifacts/ || true
+          cp /mingw64/bin/*.dll artifacts/ 2>/dev/null || true
 
-      - name: Upload
+      - name: Upload Artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: qemu-ia64-windows
