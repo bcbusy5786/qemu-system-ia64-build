@@ -33,7 +33,6 @@ jobs:
           install: >-
             base-devel
             git
-            make
             pkgconf
             diffutils
             mingw-w64-x86_64-toolchain
@@ -46,112 +45,78 @@ jobs:
             mingw-w64-x86_64-zlib
             mingw-w64-x86_64-libslirp
             mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-gtk3
             mingw-w64-x86_64-capstone
 
-      - name: Show Environment
+      - name: Environment
         run: |
           export PATH=/mingw64/bin:$PATH
 
-          echo "===== PATH ====="
-          echo "$PATH"
+          echo "==== PATH ===="
+          echo $PATH
 
-          echo
-          echo "===== Python ====="
+          echo "==== Python ===="
           which python
           python --version
 
-          which pip
-          pip --version
-
-          echo
-          echo "===== GCC ====="
-          which gcc
-          gcc --version
-
-          echo
-          echo "===== Meson ====="
+          echo "==== Meson ===="
           which meson
           meson --version
 
-          echo
-          echo "===== Ninja ====="
+          echo "==== Ninja ===="
           which ninja
           ninja --version
 
-      - name: Detect Build System
-        id: detect
+          echo "==== GCC ===="
+          which gcc
+          gcc --version
+
+      - name: Configure
         run: |
           export PATH=/mingw64/bin:$PATH
-
-          if [ -f configure ]; then
-            echo "type=configure" >> "$GITHUB_OUTPUT"
-          elif [ -f meson.build ]; then
-            echo "type=meson" >> "$GITHUB_OUTPUT"
-          else
-            echo "Repository files:"
-            ls -la
-            exit 1
-          fi
-
-      - name: Configure (configure)
-        if: steps.detect.outputs.type == 'configure'
-        run: |
-          export PATH=/mingw64/bin:$PATH
-
-          which python
-          python --version
 
           chmod +x configure
 
           ./configure \
             --target-list=ia64-softmmu \
-            --enable-slirp \
-            --enable-sdl \
-            --disable-werror\
-            --disable-tools
-            --disable-tests  
+            --enable-gtk
 
-      - name: Configure (meson)
-        if: steps.detect.outputs.type == 'meson'
+      - name: Build IA64 only
         run: |
           export PATH=/mingw64/bin:$PATH
 
-          meson setup build
+          ninja -C build \
+            qemu-system-ia64 \
+            roms/ia64-firmware/ia64-firmware.bin
 
-      - name: Build (configure)
-        if: steps.detect.outputs.type == 'configure'
-        run: |
-          export PATH=/mingw64/bin:$PATH
-
-          make -j$(nproc)
-
-      - name: Build (meson)
-        if: steps.detect.outputs.type == 'meson'
-        run: |
-          export PATH=/mingw64/bin:$PATH
-
-          ninja -C build
-
-      - name: Collect Artifacts
+      - name: Collect
         if: always()
         run: |
           mkdir -p artifacts
 
-          find . -iname "*.exe" -exec cp {} artifacts/ \; || true
+          echo "===== EXE ====="
+          find build -name "qemu-system-ia64*" || true
 
-          if [ -d pc-bios ]; then
-            cp -r pc-bios artifacts/
+          echo "===== Firmware ====="
+          find build -name "ia64-firmware.bin" || true
+
+          if [ -f build/qemu-system-ia64.exe ]; then
+              cp build/qemu-system-ia64.exe artifacts/
+          elif [ -f build/qemu-system-ia64 ]; then
+              cp build/qemu-system-ia64 artifacts/
           fi
 
-          if [ -d build/pc-bios ]; then
-            cp -r build/pc-bios artifacts/
+          if [ -f build/roms/ia64-firmware/ia64-firmware.bin ]; then
+              mkdir -p artifacts/roms/ia64-firmware
+              cp build/roms/ia64-firmware/ia64-firmware.bin \
+                 artifacts/roms/ia64-firmware/
           fi
 
           cp /mingw64/bin/*.dll artifacts/ 2>/dev/null || true
 
-      - name: Upload Artifacts
+      - name: Upload
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qemu-ia64-windows
+          name: qemu-system-ia64-windows
           path: artifacts
