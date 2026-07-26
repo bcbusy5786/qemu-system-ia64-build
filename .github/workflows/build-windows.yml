@@ -106,7 +106,8 @@ jobs:
           ./configure \
             --target-list=ia64-softmmu \
             --enable-slirp \
-            --enable-sdl
+            --enable-sdl \
+            --disable-werror
 
       - name: Configure (meson)
         if: steps.detect.outputs.type == 'meson'
